@@ -9,8 +9,8 @@ def find_sum_of_all_whole_divisors(n):
     return div_sum
 
 
-a = 122
-b = 100
+a = 11
+b = 10
 a = a if a < b else b
 print(a)
 divisors_sum = find_sum_of_all_whole_divisors(a)

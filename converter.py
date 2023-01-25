@@ -3,10 +3,10 @@ class SemanticError(Exception):
         self.msg = msg
     
     def __str__(self):
-        return 'SemanticError: {}'.format(self.msg)
+        return 'Semantic Error: {}'.format(self.msg)
 
-class Generator:
-    text_start = """
+class Converter:
+    script_start = """
 .386
 .model flat, stdcall
 include \masm32\include\masm32rt.inc
@@ -20,12 +20,12 @@ __print proc
     pop   ebp
     ret
 __print endp
-start:
+start_position:
 invoke main
 invoke ExitProcess, 0
 """
     
-    binary_ops = [
+    binary_operations = [
         'plus',
         'minus',
         'mul',
@@ -37,16 +37,16 @@ invoke ExitProcess, 0
     
     def __init__(self):
         self.function_ids = []
-        self.jmp_counter = 0
+        self.jump_counter = 0
     
-    def __generate_expression(self, node, variables):
-        type = node['type']
+    def __convert_expression(self, entry, variables):
+        variation = entry['variation']
         
-        if type == 'number':
-            return ['push {}'.format(node['value'])]
+        if variation == 'number':
+            return ['push {}'.format(entry['value'])]
         
-        if type == 'id':
-            name = node['name']
+        if variation == 'id':
+            name = entry['name']
             
             if name == 'True':
                 return ['push 1']
@@ -60,23 +60,23 @@ invoke ExitProcess, 0
                 'push eax'
             ]
         
-        if type == 'function_call':    
-            name = node['name']
-            parameters = node['parameters']
+        if variation == 'function_call':
+            name = entry['name']
+            parameters = entry['parameters']
             code = []
             for parameter in parameters:
-                code.extend(self.__generate_expression(parameter, variables))
+                code.extend(self.__convert_expression(parameter, variables))
             return code + [
                 'call {}'.format(name),
                 'add esp, {}'.format(4 * len(parameters)),
                 'push ebx'
             ]
         
-        if type in self.binary_ops:
-            op1 = self.__generate_expression(node['op1'], variables)
-            op2 = self.__generate_expression(node['op2'], variables)
+        if variation in self.binary_operations:
+            op1 = self.__convert_expression(entry['op1'], variables)
+            op2 = self.__convert_expression(entry['op2'], variables)
             
-            if type == 'plus':
+            if variation == 'plus':
                 return op1 + op2 + [
                     'pop eax',
                     'pop ebx',
@@ -84,7 +84,7 @@ invoke ExitProcess, 0
                     'push ebx'
                 ]
             
-            if type == 'minus':
+            if variation == 'minus':
                 return op1 + op2 + [
                     'pop eax',
                     'pop ebx',
@@ -92,7 +92,7 @@ invoke ExitProcess, 0
                     'push ebx'
                 ]
             
-            if type == 'mul':
+            if variation == 'mul':
                 return op1 + op2 + [
                     'pop ebx',
                     'pop eax',
@@ -100,7 +100,7 @@ invoke ExitProcess, 0
                     'push eax'
                 ]
             
-            if type == 'percent':
+            if variation == 'percent':
                 return op1 + op2 + [
                     'pop ebx',
                     'pop eax',
@@ -109,7 +109,7 @@ invoke ExitProcess, 0
                     'push edx'
                 ]
             
-            if type == 'less':
+            if variation == 'less':
                 return op1 + op2 + [
                     'pop ebx',
                     'pop eax',
@@ -119,7 +119,7 @@ invoke ExitProcess, 0
                     'push eax'
                 ]
             
-            if type == 'greater':
+            if variation == 'greater':
                 return op1 + op2 + [
                     'pop ebx',
                     'pop eax',
@@ -129,7 +129,7 @@ invoke ExitProcess, 0
                     'push eax'
                 ]
             
-            if type == 'equals':
+            if variation == 'equals':
                 return op1 + op2 + [
                     'pop ebx',
                     'pop eax',
@@ -139,26 +139,26 @@ invoke ExitProcess, 0
                     'push eax'
                 ]
         
-        raise SemanticError('Unknow operation "{}"'.format(type))
+        raise SemanticError('Unknown operation "{}"'.format(variation))
     
-    def __generate_inner(self, node, variables):
-        type = node['type']
+    def __convert_inner(self, entry, variables):
+        variation = entry['variation']
         
-        if type == 'return':
-            return self.__generate_expression(node['expression'], variables) + [
+        if variation == 'return':
+            return self.__convert_expression(entry['expression'], variables) + [
                 'pop ebx',
                 'mov esp, ebp',
                 'pop ebp',
                 'ret'
             ]
         
-        if type == 'assignment':
-            name = node['name']
-            node_value = node['value']
-            value = self.__generate_expression(node_value, variables)
+        if variation == 'assignment':
+            name = entry['name']
+            node_value = entry['value']
+            value = self.__convert_expression(node_value, variables)
             ternary_operator = []
-            if 'ternary' in node:
-                ternary_operator = self.__generate_inner(node['ternary'], variables)
+            if 'ternary' in entry:
+                ternary_operator = self.__convert_inner(entry['ternary'], variables)
             code = []
             
             if name not in variables[1]:
@@ -173,43 +173,43 @@ invoke ExitProcess, 0
                 'mov [ebp{:+}], ebx'.format(variables[1][name])
             ] + ternary_operator
         
-        if type == 'if':
-            condition = self.__generate_expression(node['condition'], variables)
+        if variation == 'if':
+            condition = self.__convert_expression(entry['condition'], variables)
             body = []
-            for inner_node in node['body']:
-                body.extend(self.__generate_inner(inner_node, variables))
-            self.jmp_counter += 1
+            for inner_entry in entry['body']:
+                body.extend(self.__convert_inner(inner_entry, variables))
+            self.jump_counter += 1
             return condition + [
                 'pop ebx',
                 'cmp ebx, 0',
-                'je _if_end_{}'.format(self.jmp_counter)
+                'je _if_end_{}'.format(self.jump_counter)
             ] + body + [
-                '_if_end_{}:'.format(self.jmp_counter)
+                '_if_end_{}:'.format(self.jump_counter)
             ]
         
-        if type == 'while':
-            condition = self.__generate_expression(node['condition'], variables)
+        if variation == 'while':
+            condition = self.__convert_expression(entry['condition'], variables)
             body = []
-            for inner_node in node['body']:
-                body.extend(self.__generate_inner(inner_node, variables))
-            self.jmp_counter += 1
-            return ['_while_{}:'.format(self.jmp_counter)] + condition + [
+            for inner_entry in entry['body']:
+                body.extend(self.__convert_inner(inner_entry, variables))
+            self.jump_counter += 1
+            return ['_while_{}:'.format(self.jump_counter)] + condition + [
                 'pop eax',
                 'cmp eax, 0',
-                'je _while_end_{}'.format(self.jmp_counter)
+                'je _while_end_{}'.format(self.jump_counter)
             ] + body + [
-                'jmp _while_{}'.format(self.jmp_counter),
-                '_while_end_{}:'.format(self.jmp_counter)
+                'jmp _while_{}'.format(self.jump_counter),
+                '_while_end_{}:'.format(self.jump_counter)
             ]
         
-        if type == 'print':
-            return self.__generate_expression(node['expression'], variables) + [
+        if variation == 'print':
+            return self.__convert_expression(entry['expression'], variables) + [
                 'call __print'
             ]
         
-        raise SemanticError('Unknow operation "{}"'.format(type))
+        raise SemanticError('Unknow operation "{}"'.format(variation))
     
-    def __generate_function(self, function):
+    def __convert_function(self, function):
         name = function['name']
         parameters = function['parameters']
         variables = [0, {}]
@@ -226,46 +226,39 @@ invoke ExitProcess, 0
             i += 1
         
         for node in function['body']:
-            code.extend(self.__generate_inner(node, variables))
+            code.extend(self.__convert_inner(node, variables))
             
         code.append('{} endp'.format(name))
         
         return code
     
-    def generate(self, ast):
-        main_function = {
-            'type': 'function',
+    def convert(self, parsed):
+        main = {
+            'variation': 'function',
             'name': 'main',
             'parameters': [], 
-            'body': [] }
+            'body': []}
         functions = []
         
-        for node in ast:
-            if node['type'] == 'function':
-                if node['name'] in self.function_ids:
-                    raise SemanticError('Function "{}" is already defined'.format(node['name']))
-                functions.append(self.__generate_function(node))
-                self.function_ids.append(node['name'])
+        for entry in parsed:
+            if entry['variation'] == 'function':
+                if entry['name'] in self.function_ids:
+                    raise SemanticError('Function "{}" is already defined'.format(entry['name']))
+                functions.append(self.__convert_function(entry))
+                self.function_ids.append(entry['name'])
             else:
-                main_function['body'].append(node)
+                main['body'].append(entry)
         
-        main_function['body'].append({
-            'type': 'return', 
+        main['body'].append({
+            'variation': 'return',
             'expression': {
-                'type': 'number',
+                'variation': 'number',
                 'value': '0'
             }})
-        functions.append(self.__generate_function(main_function))
+        functions.append(self.__convert_function(main))
         
         code = []
         for function in functions:
             code.append('\n'.join(function))
         
-        return "{}\n{}\n{}".format(self.text_start, '\n\n'.join(code), 'end start')
-        
-        
-        
-        
-        
-        
-        
+        return "{}\n{}\n{}".format(self.script_start, '\n\n'.join(code), 'end start_position')

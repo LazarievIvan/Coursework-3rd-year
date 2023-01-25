@@ -6,49 +6,49 @@ class TokenError(Exception):
         self.line = line
     
     def __str__(self):
-        return 'LexicalError: Unexpected symbol "{}" at line {}'.format(self.symbol, self.line)
+        return 'Lexical error: Unexpected char/expression "{}" at line {}'.format(self.symbol, self.line)
 
 class Token:
-    def __init__(self, kind, value, pos):
-        self.kind = kind
+    def __init__(self, variation, value, position):
+        self.variation = variation
         self.value = value
-        self.pos = pos
+        self.position = position
     
     def __str__(self):
-        return '(Token at line {}) kind: {}, value: {}'.format(self.pos, self.kind, self.value)
+        return '(Token at line {}) variation: {}, value: {}'.format(self.position, self.variation, self.value)
     
     def __repr__(self):
-        return self.kind
+        return self.variation
 
-def tokenize(text, token_list):
+def tokenize(input, all_tokens):
     tokens = []
 
-    lines = text.splitlines()
-    pattern = '|'.join('(?P<%s>%s)' % pair for pair in token_list)
-    regex = re.compile(pattern)
+    lines = input.splitlines()
+    patterns = '|'.join('(?P<%s>%s)' % pair for pair in all_tokens)
+    regex_pattern = re.compile(patterns)
     
-    for count, line in enumerate(lines):
-        tokens += [tokenize_line(count + 1, line, regex)]
+    for num, line in enumerate(lines):
+        tokens += [tokenize_line(num + 1, line, regex_pattern)]
 
     return tokens
 
-def tokenize_line(count, line, regex):
-    tokens = []
-    pos = 0
+def tokenize_line(num, line, regex):
+    tokenized_line = []
+    position = 0
 
-    while pos < len(line):
+    while position < len(line):
         
-        match = regex.match(line, pos)
+        match = regex.match(line, position)
         if not match:
-            raise TokenError(line[pos], count)
+            raise TokenError(line[position], num)
         
-        kind = match.lastgroup
-        value = match.group(kind)
-        pos = match.end()
+        variation = match.lastgroup
+        value = match.group(variation)
+        position = match.end()
         
-        if kind == 'WHITESPACE':
+        if variation == 'WHITESPACE':
             continue
 
-        tokens.append(Token(kind, value, count))
+        tokenized_line.append(Token(variation, value, num))
 
-    return tokens
+    return tokenized_line

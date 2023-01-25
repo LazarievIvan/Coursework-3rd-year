@@ -1,9 +1,9 @@
 import sys, json
 import tokenizer
 from parse import *
-from generator import *
+from converter import *
 
-token_list = [
+all_tokens = [
     ('PLUS', r'\+'),
     ('MINUS', r'\-'),
     ('MUL', r'\*'),
@@ -15,7 +15,6 @@ token_list = [
     ('RET', r'return'),
     ('IF', r'if'),
     ('ELSE', r'else'),
-    #('TERNARY', r'if [a-zA-Z][a-zA-Z0-9_]*\s*[\<|\>]\s*[a-zA-Z][a-zA-Z0-9_]* else [a-zA-Z][a-zA-Z0-9_]*'),
     ('WHILE', r'while'),
     ('DEF', r'def'),
     ('PRINT', r'print'),
@@ -31,33 +30,33 @@ token_list = [
 
 if __name__ == '__main__':
     filename = "algorithm.py"#sys.argv[1]
-    text = ''
+    contents = ''
 
     with open(filename, 'r') as file:
-        text = file.read().strip()
+        contents = file.read().strip()
     
-    tokens = []
+    code_tokens = []
     try:
-        tokens = tokenizer.tokenize(text, token_list)
+        code_tokens = tokenizer.tokenize(contents, all_tokens)
     except tokenizer.TokenError as e:
         print(e)
     
-    ast = []
+    parsed_code = []
     parser = Parser()
     try:
-        ast = parser.parse(tokens)
+        parsed_code = parser.parse(code_tokens)
     except ParseError as e:
         print(e)
         
-    json_obj = json.dumps(ast, indent=4)
-    print(json_obj)
+    syntax_tree = json.dumps(parsed_code, indent=4)
+    print(syntax_tree)
     
-    generator = Generator()
-    text = ''
+    converter = Converter()
+    contents = ''
     try:
-        text = generator.generate(ast)
+        contents = converter.convert(parsed_code)
     except SemanticError as e:
         print(e)
     
     with open(filename.split('.')[0] + '.asm', 'w') as file:
-        file.write(text)
+        file.write(contents)
